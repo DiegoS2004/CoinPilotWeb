@@ -56,7 +56,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b">
         <div className="flex items-center gap-2 px-2 py-2">
-          <div className="text-2xl">💰</div>
+          <img src="/coinpilot.png" alt="CoinPilot Logo" className="h-8 w-8" />
           <div>
             <h2 className="text-lg font-semibold">CoinPilot</h2>
             <p className="text-xs text-muted-foreground">Finanzas Personales</p>
