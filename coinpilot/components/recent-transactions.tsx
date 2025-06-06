@@ -7,6 +7,7 @@ import { Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
+import { formatCurrency } from "@/lib/utils"
 
 interface Transaction {
   id: string
@@ -85,13 +86,6 @@ export function RecentTransactions({ onUpdate }: RecentTransactionsProps) {
   useEffect(() => {
     fetchTransactions()
   }, [user])
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-ES", {
-      style: "currency",
-      currency: "EUR",
-    }).format(amount)
-  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("es-ES", {

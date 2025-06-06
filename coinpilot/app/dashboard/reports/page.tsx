@@ -21,6 +21,7 @@ import {
 } from "recharts"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
+import { formatCurrency } from "@/lib/utils"
 
 interface CategoryData {
   name: string
@@ -137,13 +138,6 @@ export default function ReportsPage() {
   useEffect(() => {
     fetchReportsData()
   }, [user])
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-ES", {
-      style: "currency",
-      currency: "EUR",
-    }).format(value)
-  }
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {

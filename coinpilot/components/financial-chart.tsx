@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
+import { formatCurrency } from "@/lib/utils"
 
 interface ChartData {
   month: string
@@ -88,12 +89,7 @@ export function FinancialChart() {
           <XAxis dataKey="month" />
           <YAxis />
           <Tooltip
-            formatter={(value: number) => [
-              new Intl.NumberFormat("es-ES", {
-                style: "currency",
-                currency: "EUR",
-              }).format(value),
-            ]}
+            formatter={(value: number) => [formatCurrency(value)]}
           />
           <Legend />
           <Bar dataKey="ingresos" fill="#22c55e" name="Ingresos" />
