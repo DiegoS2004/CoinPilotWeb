@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Plus, TrendingUp, TrendingDown, DollarSign, Activity } from "lucide-react"
+import { Plus, TrendingUp, TrendingDown, DollarSign, Activity, Eye, EyeOff } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import { AddTransactionDialog } from "@/components/add-transaction-dialog"
@@ -29,6 +29,7 @@ export default function DashboardPage() {
   })
   const [loading, setLoading] = useState(true)
   const [showAddTransaction, setShowAddTransaction] = useState(false)
+  const [showNumbers, setShowNumbers] = useState(true)
 
   const fetchStats = async () => {
     if (!user) return
@@ -116,11 +117,16 @@ export default function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Balance Total</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <Button variant="ghost" size="icon" onClick={() => setShowNumbers(v => !v)}>
+                  {showNumbers ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className={`text-2xl font-bold ${stats.totalBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                {formatCurrency(stats.totalBalance)}
+                {showNumbers ? formatCurrency(stats.totalBalance) : "•••••"}
               </div>
               <p className="text-xs text-muted-foreground">Balance actual de todas tus cuentas</p>
             </CardContent>
@@ -132,7 +138,7 @@ export default function DashboardPage() {
               <TrendingUp className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.monthlyIncome)}</div>
+              <div className="text-2xl font-bold text-green-600">{showNumbers ? formatCurrency(stats.monthlyIncome) : "•••••"}</div>
               <p className="text-xs text-muted-foreground">Ingresos de este mes</p>
             </CardContent>
           </Card>
@@ -143,7 +149,7 @@ export default function DashboardPage() {
               <TrendingDown className="h-4 w-4 text-red-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{formatCurrency(stats.monthlyExpenses)}</div>
+              <div className="text-2xl font-bold text-red-600">{showNumbers ? formatCurrency(stats.monthlyExpenses) : "•••••"}</div>
               <p className="text-xs text-muted-foreground">Gastos de este mes</p>
             </CardContent>
           </Card>

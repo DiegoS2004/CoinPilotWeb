@@ -75,11 +75,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  const getRedirectUrl = () => {
+    if (typeof window !== "undefined" && window.location.hostname === "coin-pilot.vercel.app") {
+      return "https://coin-pilot.vercel.app/dashboard"
+    }
+    return "http://localhost:3000/dashboard"
+  }
+
   const signInWithGoogle = async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: "https://coin-pilot.vercel.app/dashboard",
+        redirectTo: getRedirectUrl(),
       },
     })
     return { data, error }
@@ -89,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
-        redirectTo: "https://coin-pilot.vercel.app/dashboard",
+        redirectTo: getRedirectUrl(),
       },
     })
     return { data, error }
