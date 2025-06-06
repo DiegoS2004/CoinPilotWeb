@@ -1,10 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
 import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
-    // Get user from Supabase auth
     const authHeader = request.headers.get("authorization")
     if (!authHeader) {
       return NextResponse.json({ error: "No authorization header" }, { status: 401 })
@@ -13,10 +11,10 @@ export async function GET(request: NextRequest) {
     const token = authHeader.replace("Bearer ", "")
     const {
       data: { user },
-      error,
+      error: authError,
     } = await supabase.auth.getUser(token)
 
-    if (error || !user) {
+    if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -26,14 +24,24 @@ export async function GET(request: NextRequest) {
     const dateFilter = searchParams.get("dateFilter")
     const limit = searchParams.get("limit")
 
-    const whereClause: any = { userId: user.id }
+    let query = supabase
+      .from("transactions")
+      .select(`
+        *,
+        categories (
+          name,
+          icon
+        )
+      `)
+      .eq("user_id", user.id)
+      .order("transaction_date", { ascending: false })
 
     if (type && type !== "all") {
-      whereClause.type = type.toUpperCase()
+      query = query.eq("type", type)
     }
 
     if (categoryId && categoryId !== "all") {
-      whereClause.categoryId = categoryId
+      query = query.eq("category_id", categoryId)
     }
 
     if (dateFilter && dateFilter !== "all") {
@@ -57,21 +65,16 @@ export async function GET(request: NextRequest) {
           startDate = new Date(0)
       }
 
-      whereClause.transactionDate = {
-        gte: startDate,
-      }
+      query = query.gte("transaction_date", startDate.toISOString().split("T")[0])
     }
 
-    const transactions = await prisma.transaction.findMany({
-      where: whereClause,
-      include: {
-        category: true,
-      },
-      orderBy: {
-        transactionDate: "desc",
-      },
-      take: limit ? Number.parseInt(limit) : undefined,
-    })
+    if (limit) {
+      query = query.limit(Number(limit))
+    }
+
+    const { data: transactions, error } = await query
+
+    if (error) throw error
 
     return NextResponse.json(transactions)
   } catch (error) {
@@ -90,29 +93,36 @@ export async function POST(request: NextRequest) {
     const token = authHeader.replace("Bearer ", "")
     const {
       data: { user },
-      error,
+      error: authError,
     } = await supabase.auth.getUser(token)
 
-    if (error || !user) {
+    if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
     const { amount, description, categoryId, type, transactionDate } = body
 
-    const transaction = await prisma.transaction.create({
-      data: {
-        userId: user.id,
-        amount: Number.parseFloat(amount),
+    const { data: transaction, error } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: user.id,
+        amount: Number(amount),
         description: description || null,
-        categoryId: categoryId || null,
-        type: type.toUpperCase(),
-        transactionDate: new Date(transactionDate),
-      },
-      include: {
-        category: true,
-      },
-    })
+        category_id: categoryId || null,
+        type: type.toLowerCase(),
+        transaction_date: transactionDate,
+      })
+      .select(`
+        *,
+        categories (
+          name,
+          icon
+        )
+      `)
+      .single()
+
+    if (error) throw error
 
     return NextResponse.json(transaction)
   } catch (error) {

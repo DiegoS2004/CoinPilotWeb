@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
 import { supabase } from "@/lib/supabase"
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
@@ -12,28 +11,31 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const token = authHeader.replace("Bearer ", "")
     const {
       data: { user },
-      error,
+      error: authError,
     } = await supabase.auth.getUser(token)
 
-    if (error || !user) {
+    if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Verify the transaction belongs to the user
-    const transaction = await prisma.transaction.findFirst({
-      where: {
-        id: params.id,
-        userId: user.id,
-      },
-    })
+    const { data: transaction, error: fetchError } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("id", params.id)
+      .eq("user_id", user.id)
+      .single()
 
-    if (!transaction) {
+    if (fetchError) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
     }
 
-    await prisma.transaction.delete({
-      where: { id: params.id },
-    })
+    const { error: deleteError } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", params.id)
+
+    if (deleteError) throw deleteError
 
     return NextResponse.json({ success: true })
   } catch (error) {

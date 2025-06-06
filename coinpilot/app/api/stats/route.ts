@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
 import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
@@ -12,10 +11,10 @@ export async function GET(request: NextRequest) {
     const token = authHeader.replace("Bearer ", "")
     const {
       data: { user },
-      error,
+      error: authError,
     } = await supabase.auth.getUser(token)
 
-    if (error || !user) {
+    if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -25,55 +24,51 @@ export async function GET(request: NextRequest) {
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
 
     // Get all transactions for total balance
-    const allTransactions = await prisma.transaction.findMany({
-      where: { userId: user.id },
-      select: { amount: true, type: true },
-    })
+    const { data: allTransactions, error: allError } = await supabase
+      .from("transactions")
+      .select("amount, type")
+      .eq("user_id", user.id)
+
+    if (allError) throw allError
 
     // Get current month transactions
-    const monthlyTransactions = await prisma.transaction.findMany({
-      where: {
-        userId: user.id,
-        transactionDate: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-      },
-      select: { amount: true, type: true },
-    })
+    const { data: monthlyTransactions, error: monthlyError } = await supabase
+      .from("transactions")
+      .select("amount, type")
+      .eq("user_id", user.id)
+      .gte("transaction_date", startOfMonth.toISOString().split("T")[0])
+      .lte("transaction_date", endOfMonth.toISOString().split("T")[0])
+
+    if (monthlyError) throw monthlyError
 
     let totalBalance = 0
     let monthlyIncome = 0
     let monthlyExpenses = 0
 
     // Calculate total balance
-    allTransactions.forEach((transaction) => {
-      const amount = Number.parseFloat(transaction.amount.toString())
-      if (transaction.type === "INCOME") {
-        totalBalance += amount
+    allTransactions?.forEach((transaction) => {
+      if (transaction.type === "income") {
+        totalBalance += Number(transaction.amount)
       } else {
-        totalBalance -= amount
+        totalBalance -= Number(transaction.amount)
       }
     })
 
     // Calculate monthly stats
-    monthlyTransactions.forEach((transaction) => {
-      const amount = Number.parseFloat(transaction.amount.toString())
-      if (transaction.type === "INCOME") {
-        monthlyIncome += amount
+    monthlyTransactions?.forEach((transaction) => {
+      if (transaction.type === "income") {
+        monthlyIncome += Number(transaction.amount)
       } else {
-        monthlyExpenses += amount
+        monthlyExpenses += Number(transaction.amount)
       }
     })
 
-    const stats = {
+    return NextResponse.json({
       totalBalance,
       monthlyIncome,
       monthlyExpenses,
-      transactionCount: allTransactions.length,
-    }
-
-    return NextResponse.json(stats)
+      transactionCount: allTransactions?.length || 0,
+    })
   } catch (error) {
     console.error("Error fetching stats:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
