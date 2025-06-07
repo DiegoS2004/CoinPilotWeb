@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
       }
 
       query = query.gte("transaction_date", startDate.toISOString().split("T")[0])
-    }
+      }
 
     if (limit) {
       query = query.limit(Number(limit))

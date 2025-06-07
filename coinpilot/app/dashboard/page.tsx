@@ -10,13 +10,18 @@ import { useAuth } from "@/hooks/use-auth"
 import { AddTransactionDialog } from "@/components/add-transaction-dialog"
 import { RecentTransactions } from "@/components/recent-transactions"
 import { FinancialChart } from "@/components/financial-chart"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, formatMXN } from "@/lib/utils"
+import { getUSDtoMXNRate, convertUSDtoMXN } from "@/lib/exchange-rate"
 
 interface DashboardStats {
   totalBalance: number
   monthlyIncome: number
   monthlyExpenses: number
   transactionCount: number
+  totalSavings: number
+  totalInvestmentsMXN: number
+  totalInvestmentsUSD: number
+  exchangeRate: number
 }
 
 export default function DashboardPage() {
@@ -26,10 +31,15 @@ export default function DashboardPage() {
     monthlyIncome: 0,
     monthlyExpenses: 0,
     transactionCount: 0,
+    totalSavings: 0,
+    totalInvestmentsMXN: 0,
+    totalInvestmentsUSD: 0,
+    exchangeRate: 0,
   })
   const [loading, setLoading] = useState(true)
   const [showAddTransaction, setShowAddTransaction] = useState(false)
   const [showNumbers, setShowNumbers] = useState(true)
+  const [includeAssets, setIncludeAssets] = useState(false)
 
   const fetchStats = async () => {
     if (!user) return
@@ -39,6 +49,9 @@ export default function DashboardPage() {
       const now = new Date()
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+
+      // Get current exchange rate
+      const exchangeRate = await getUSDtoMXNRate()
 
       // Fetch all transactions for total balance
       const { data: allTransactions } = await supabase
@@ -54,9 +67,30 @@ export default function DashboardPage() {
         .gte("transaction_date", startOfMonth.toISOString().split("T")[0])
         .lte("transaction_date", endOfMonth.toISOString().split("T")[0])
 
+      // Fetch savings
+      const { data: savings } = await supabase
+        .from("savings")
+        .select("amount")
+        .eq("user_id", user.id)
+
+      // Fetch regular investments (in MXN)
+      const { data: investments } = await supabase
+        .from("investments")
+        .select("amount")
+        .eq("user_id", user.id)
+
+      // Fetch stock investments (in USD)
+      const { data: stockInvestments } = await supabase
+        .from("stock_investments")
+        .select("shares, purchase_price, current_price")
+        .eq("user_id", user.id)
+
       let totalBalance = 0
       let monthlyIncome = 0
       let monthlyExpenses = 0
+      let totalSavings = 0
+      let totalInvestmentsMXN = 0
+      let totalInvestmentsUSD = 0
 
       // Calculate total balance
       allTransactions?.forEach((transaction) => {
@@ -76,11 +110,30 @@ export default function DashboardPage() {
         }
       })
 
+      // Calculate savings and regular investments totals (in MXN)
+      savings?.forEach((saving) => {
+        totalSavings += Number(saving.amount)
+      })
+
+      investments?.forEach((investment) => {
+        totalInvestmentsMXN += Number(investment.amount)
+      })
+
+      // Calculate stock investments total (in USD)
+      stockInvestments?.forEach((stock) => {
+        const currentPrice = stock.current_price || stock.purchase_price
+        totalInvestmentsUSD += Number(stock.shares) * Number(currentPrice)
+      })
+
       setStats({
         totalBalance,
         monthlyIncome,
         monthlyExpenses,
         transactionCount: allTransactions?.length || 0,
+        totalSavings,
+        totalInvestmentsMXN,
+        totalInvestmentsUSD,
+        exchangeRate,
       })
     } catch (error) {
       console.error("Error fetching stats:", error)
@@ -91,7 +144,32 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchStats()
+    // Refresh stats every minute to update exchange rate
+    const interval = setInterval(fetchStats, 60000)
+    return () => clearInterval(interval)
   }, [user])
+
+  const getDisplayBalance = () => {
+    if (!includeAssets) {
+      return stats.totalBalance
+    }
+    
+    // Convert USD investments to MXN
+    const investmentsUSDinMXN = convertUSDtoMXN(stats.totalInvestmentsUSD, stats.exchangeRate)
+    
+    // Total balance includes:
+    // - Regular balance (MXN)
+    // - Savings (MXN)
+    // - Regular investments (MXN)
+    // - Stock investments (USD converted to MXN)
+    return stats.totalBalance + stats.totalSavings + stats.totalInvestmentsMXN + investmentsUSDinMXN
+  }
+
+  const getTotalInvestments = () => {
+    // Convert USD investments to MXN and add to MXN investments
+    const investmentsUSDinMXN = convertUSDtoMXN(stats.totalInvestmentsUSD, stats.exchangeRate)
+    return stats.totalInvestmentsMXN + investmentsUSDinMXN
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -113,11 +191,19 @@ export default function DashboardPage() {
 
       <main className="flex-1 p-4 space-y-6">
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+          <Card className="lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Balance Total</CardTitle>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => setIncludeAssets(!includeAssets)}
+                >
+                  {includeAssets ? "Excluir activos" : "Incluir activos"}
+                </Button>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
                 <Button variant="ghost" size="icon" onClick={() => setShowNumbers(v => !v)}>
                   {showNumbers ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -125,10 +211,51 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${stats.totalBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                {showNumbers ? formatCurrency(stats.totalBalance) : "•••••"}
+              <div className={`text-2xl font-bold ${getDisplayBalance() >= 0 ? "text-green-600" : "text-red-600"}`}>
+                {showNumbers ? formatMXN(getDisplayBalance()) : "•••••"}
               </div>
-              <p className="text-xs text-muted-foreground">Balance actual de todas tus cuentas</p>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>Balance actual de todas tus cuentas</p>
+                {includeAssets && (
+                  <div className="text-xs space-y-1">
+                    <p>Balance: {formatMXN(stats.totalBalance)}</p>
+                    <p>Ahorros: {formatMXN(stats.totalSavings)}</p>
+                    <p>Inversiones en MXN: {formatMXN(stats.totalInvestmentsMXN)}</p>
+                    <p>Inversiones en USD: {formatCurrency(stats.totalInvestmentsUSD)} ({formatMXN(convertUSDtoMXN(stats.totalInvestmentsUSD, stats.exchangeRate))})</p>
+                    <p className="text-xs text-muted-foreground">Tipo de cambio: {stats.exchangeRate.toFixed(4)} MXN/USD</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ahorros</CardTitle>
+              <TrendingUp className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">
+                {showNumbers ? formatMXN(stats.totalSavings) : "•••••"}
+              </div>
+              <p className="text-xs text-muted-foreground">Total en ahorros (MXN)</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Inversiones</CardTitle>
+              <TrendingUp className="h-4 w-4 text-purple-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-600">
+                {showNumbers ? formatMXN(getTotalInvestments()) : "•••••"}
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>Total en inversiones (MXN)</p>
+                <p>Inversiones MXN: {formatMXN(stats.totalInvestmentsMXN)}</p>
+                <p>Inversiones USD: {formatCurrency(stats.totalInvestmentsUSD)}</p>
+              </div>
             </CardContent>
           </Card>
 
@@ -138,7 +265,9 @@ export default function DashboardPage() {
               <TrendingUp className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{showNumbers ? formatCurrency(stats.monthlyIncome) : "•••••"}</div>
+              <div className="text-2xl font-bold text-green-600">
+                {showNumbers ? formatMXN(stats.monthlyIncome) : "•••••"}
+              </div>
               <p className="text-xs text-muted-foreground">Ingresos de este mes</p>
             </CardContent>
           </Card>
@@ -149,7 +278,9 @@ export default function DashboardPage() {
               <TrendingDown className="h-4 w-4 text-red-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{showNumbers ? formatCurrency(stats.monthlyExpenses) : "•••••"}</div>
+              <div className="text-2xl font-bold text-red-600">
+                {showNumbers ? formatMXN(stats.monthlyExpenses) : "•••••"}
+              </div>
               <p className="text-xs text-muted-foreground">Gastos de este mes</p>
             </CardContent>
           </Card>
@@ -185,6 +316,71 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <RecentTransactions onUpdate={fetchStats} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Savings and Investments Section */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ahorros Recientes</CardTitle>
+              <CardDescription>Últimos movimientos en tus ahorros</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {stats.totalSavings > 0 ? (
+                  <div className="text-sm space-y-2">
+                    <div className="flex justify-between items-center p-2 bg-muted rounded-lg">
+                      <span>Total en ahorros</span>
+                      <span className="font-semibold text-blue-600">
+                        {showNumbers ? formatMXN(stats.totalSavings) : "•••••"}
+                      </span>
+                    </div>
+                    <Button variant="outline" className="w-full" onClick={() => window.location.href = "/dashboard/savings"}>
+                      Ver detalles de ahorros
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center text-muted-foreground py-4">
+                    No tienes ahorros registrados
+                    <Button variant="outline" className="w-full mt-2" onClick={() => window.location.href = "/dashboard/savings"}>
+                      Agregar ahorros
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Inversiones Recientes</CardTitle>
+              <CardDescription>Últimos movimientos en tus inversiones</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {stats.totalInvestmentsMXN > 0 ? (
+                  <div className="text-sm space-y-2">
+                    <div className="flex justify-between items-center p-2 bg-muted rounded-lg">
+                      <span>Total en inversiones</span>
+                      <span className="font-semibold text-purple-600">
+                        {showNumbers ? formatMXN(stats.totalInvestmentsMXN) : "•••••"}
+                      </span>
+                    </div>
+                    <Button variant="outline" className="w-full" onClick={() => window.location.href = "/dashboard/investments"}>
+                      Ver detalles de inversiones
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center text-muted-foreground py-4">
+                    No tienes inversiones registradas
+                    <Button variant="outline" className="w-full mt-2" onClick={() => window.location.href = "/dashboard/investments"}>
+                      Agregar inversiones
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>

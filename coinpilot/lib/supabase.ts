@@ -83,6 +83,41 @@ export type Database = {
           created_at?: string
         }
       }
+      stock_investments: {
+        Row: {
+          id: string
+          user_id: string
+          symbol: string
+          shares: number
+          purchase_price: number
+          purchase_date: string
+          current_price: number | null
+          last_updated: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          symbol: string
+          shares: number
+          purchase_price: number
+          purchase_date: string
+          current_price?: number | null
+          last_updated?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          symbol?: string
+          shares?: number
+          purchase_price?: number
+          purchase_date?: string
+          current_price?: number | null
+          last_updated?: string | null
+          created_at?: string
+        }
+      }
     }
   }
 }

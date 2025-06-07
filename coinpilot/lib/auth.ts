@@ -5,7 +5,7 @@ export async function createOrUpdateUser(supabaseUser: User) {
   const { data, error } = await supabase
     .from('profiles')
     .upsert({
-      id: supabaseUser.id,
+    id: supabaseUser.id,
       email: supabaseUser.email,
       full_name: supabaseUser.user_metadata?.full_name || null,
       created_at: new Date().toISOString(),

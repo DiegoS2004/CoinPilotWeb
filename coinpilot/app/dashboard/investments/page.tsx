@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
+import { StockInvestments } from "@/components/stock-investments"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 interface Investment {
   id: string
@@ -60,37 +62,59 @@ export default function InvestmentsPage() {
   const totalInvestments = investments.reduce((acc, i) => acc + Number(i.amount), 0)
 
   return (
-    <div className="max-w-2xl mx-auto py-8 space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Mis Inversiones</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold mb-4">Total: {totalInvestments.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</div>
-          <form onSubmit={handleAddInvestment} className="flex flex-col gap-2 mb-6">
-            <Label>Monto</Label>
-            <Input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} required />
-            <Label>Descripción</Label>
-            <Input value={description} onChange={e => setDescription(e.target.value)} required />
-            <Label>Activo</Label>
-            <Input value={asset} onChange={e => setAsset(e.target.value)} placeholder="Ej: Bitcoin, Acciones..." required />
-            <Button type="submit" disabled={loading}>{loading ? "Guardando..." : "Agregar Inversión"}</Button>
-          </form>
-          <div>
-            <h3 className="font-semibold mb-2">Movimientos</h3>
-            {investments.length === 0 && <div className="text-muted-foreground">No hay inversiones registradas.</div>}
-            <ul className="space-y-2">
-              {investments.map(i => (
-                <li key={i.id} className="border rounded p-2 flex flex-col">
-                  <span className="font-medium">{i.amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span>
-                  <span className="text-sm">{i.description} ({i.asset})</span>
-                  <span className="text-xs text-muted-foreground">{new Date(i.date).toLocaleDateString()}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="flex flex-col min-h-screen">
+      <header className="flex items-center gap-4 p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <SidebarTrigger />
+        <div>
+          <h1 className="text-2xl font-bold">Inversiones</h1>
+          <p className="text-muted-foreground">Gestiona tus inversiones y activos</p>
+        </div>
+      </header>
+
+      <main className="flex-1 p-4 space-y-6">
+        {/* Stock Investments */}
+        <StockInvestments />
+
+        {/* Other Investments */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Otras Inversiones</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold mb-4">
+              Total: {totalInvestments.toLocaleString(undefined, { style: "currency", currency: "USD" })}
+            </div>
+            <form onSubmit={handleAddInvestment} className="flex flex-col gap-2 mb-6">
+              <Label>Monto</Label>
+              <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} required />
+              <Label>Descripción</Label>
+              <Input value={description} onChange={(e) => setDescription(e.target.value)} required />
+              <Label>Activo</Label>
+              <Input value={asset} onChange={(e) => setAsset(e.target.value)} placeholder="Ej: Bitcoin, Acciones..." required />
+              <Button type="submit" disabled={loading}>
+                {loading ? "Guardando..." : "Agregar Inversión"}
+              </Button>
+            </form>
+            <div>
+              <h3 className="font-semibold mb-2">Movimientos</h3>
+              {investments.length === 0 && <div className="text-muted-foreground">No hay inversiones registradas.</div>}
+              <ul className="space-y-2">
+                {investments.map((i) => (
+                  <li key={i.id} className="border rounded p-2 flex flex-col">
+                    <span className="font-medium">
+                      {i.amount.toLocaleString(undefined, { style: "currency", currency: "USD" })}
+                    </span>
+                    <span className="text-sm">
+                      {i.description} ({i.asset})
+                    </span>
+                    <span className="text-xs text-muted-foreground">{new Date(i.date).toLocaleDateString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   )
 } 
