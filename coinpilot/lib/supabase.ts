@@ -118,6 +118,44 @@ export type Database = {
           created_at?: string
         }
       }
+      expenses: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          amount: number
+          category: string
+          frequency: string
+          due_date: string
+          is_active: boolean
+          description: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          amount: number
+          category: string
+          frequency: string
+          due_date: string
+          is_active?: boolean
+          description?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          amount?: number
+          category?: string
+          frequency?: string
+          due_date?: string
+          is_active?: boolean
+          description?: string | null
+          created_at?: string
+        }
+      }
     }
   }
 }

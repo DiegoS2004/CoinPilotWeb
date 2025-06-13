@@ -1,2 +1,0 @@
--- Insert default categories using Prisma
--- This will be handled by the seed script instead

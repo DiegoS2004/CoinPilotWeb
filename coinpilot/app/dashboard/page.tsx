@@ -17,6 +17,7 @@ interface DashboardStats {
   totalBalance: number
   monthlyIncome: number
   monthlyExpenses: number
+  monthlyFixedExpenses: number
   transactionCount: number
   totalSavings: number
   totalInvestmentsMXN: number
@@ -30,6 +31,7 @@ export default function DashboardPage() {
     totalBalance: 0,
     monthlyIncome: 0,
     monthlyExpenses: 0,
+    monthlyFixedExpenses: 0,
     transactionCount: 0,
     totalSavings: 0,
     totalInvestmentsMXN: 0,
@@ -85,9 +87,17 @@ export default function DashboardPage() {
         .select("shares, purchase_price, current_price")
         .eq("user_id", user.id)
 
+      // Fetch fixed expenses
+      const { data: expenses } = await supabase
+        .from("expenses")
+        .select("amount, frequency")
+        .eq("user_id", user.id)
+        .eq("is_active", true)
+
       let totalBalance = 0
       let monthlyIncome = 0
       let monthlyExpenses = 0
+      let monthlyFixedExpenses = 0
       let totalSavings = 0
       let totalInvestmentsMXN = 0
       let totalInvestmentsUSD = 0
@@ -110,6 +120,26 @@ export default function DashboardPage() {
         }
       })
 
+      // Calculate monthly fixed expenses
+      expenses?.forEach((expense) => {
+        let monthlyAmount = Number(expense.amount)
+        switch (expense.frequency) {
+          case "weekly":
+            monthlyAmount = Number(expense.amount) * 4.33
+            break
+          case "biweekly":
+            monthlyAmount = Number(expense.amount) * 2.17
+            break
+          case "quarterly":
+            monthlyAmount = Number(expense.amount) / 3
+            break
+          case "yearly":
+            monthlyAmount = Number(expense.amount) / 12
+            break
+        }
+        monthlyFixedExpenses += monthlyAmount
+      })
+
       // Calculate savings and regular investments totals (in MXN)
       savings?.forEach((saving) => {
         totalSavings += Number(saving.amount)
@@ -129,6 +159,7 @@ export default function DashboardPage() {
         totalBalance,
         monthlyIncome,
         monthlyExpenses,
+        monthlyFixedExpenses,
         transactionCount: allTransactions?.length || 0,
         totalSavings,
         totalInvestmentsMXN,
@@ -287,6 +318,19 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Gastos Fijos</CardTitle>
+              <TrendingDown className="h-4 w-4 text-orange-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">
+                {showNumbers ? formatMXN(stats.monthlyFixedExpenses) : "•••••"}
+              </div>
+              <p className="text-xs text-muted-foreground">Gastos fijos mensuales</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Transacciones</CardTitle>
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
@@ -377,6 +421,40 @@ export default function DashboardPage() {
                     No tienes inversiones registradas
                     <Button variant="outline" className="w-full mt-2" onClick={() => window.location.href = "/dashboard/investments"}>
                       Agregar inversiones
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Fixed Expenses Section */}
+        <div className="grid gap-4 md:grid-cols-1">
+          <Card>
+            <CardHeader>
+              <CardTitle>Gastos Fijos</CardTitle>
+              <CardDescription>Resumen de tus gastos fijos mensuales</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {stats.monthlyFixedExpenses > 0 ? (
+                  <div className="text-sm space-y-2">
+                    <div className="flex justify-between items-center p-2 bg-muted rounded-lg">
+                      <span>Total gastos fijos mensuales</span>
+                      <span className="font-semibold text-orange-600">
+                        {showNumbers ? formatMXN(stats.monthlyFixedExpenses) : "•••••"}
+                      </span>
+                    </div>
+                    <Button variant="outline" className="w-full" onClick={() => window.location.href = "/dashboard/expenses"}>
+                      Ver detalles de gastos fijos
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center text-muted-foreground py-4">
+                    No tienes gastos fijos registrados
+                    <Button variant="outline" className="w-full mt-2" onClick={() => window.location.href = "/dashboard/expenses"}>
+                      Agregar gastos fijos
                     </Button>
                   </div>
                 )}
