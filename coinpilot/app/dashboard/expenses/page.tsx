@@ -19,7 +19,9 @@ interface Expense {
   category: string
   frequency: string
   due_date: string
+  last_paid_date?: string
   is_active: boolean
+  is_paid: boolean
   description?: string
   created_at: string
 }
@@ -157,8 +159,49 @@ export default function ExpensesPage() {
     setLoading(false)
   }
 
+  const handleMarkAsPaid = async (expense: Expense) => {
+    if (confirm(`¿Confirmar pago de ${expense.name} por ${expense.amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}?`)) {
+      setLoading(true)
+      try {
+        // Call the database function to mark as paid and calculate next due date
+        const { error } = await supabase.rpc('mark_expense_as_paid', {
+          expense_id: expense.id
+        })
+        
+        if (error) throw error
+        
+        fetchExpenses()
+      } catch (error) {
+        console.error('Error marking expense as paid:', error)
+        alert('Error al marcar como pagado')
+      }
+      setLoading(false)
+    }
+  }
+
   const totalMonthlyExpenses = expenses
-    .filter(e => e.is_active)
+    .filter(e => e.is_active && !e.is_paid)
+    .reduce((acc, expense) => {
+      let monthlyAmount = expense.amount
+      switch (expense.frequency) {
+        case "weekly":
+          monthlyAmount = expense.amount * 4.33
+          break
+        case "biweekly":
+          monthlyAmount = expense.amount * 2.17
+          break
+        case "quarterly":
+          monthlyAmount = expense.amount / 3
+          break
+        case "yearly":
+          monthlyAmount = expense.amount / 12
+          break
+      }
+      return acc + monthlyAmount
+    }, 0)
+
+  const totalPaidExpenses = expenses
+    .filter(e => e.is_active && e.is_paid)
     .reduce((acc, expense) => {
       let monthlyAmount = expense.amount
       switch (expense.frequency) {
@@ -212,10 +255,18 @@ export default function ExpensesPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Gastos Fijos</CardTitle>
-            <div className="flex items-center gap-2">
-              <div className="text-lg font-semibold">
-                {showNumbers ? totalMonthlyExpenses.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : "•••••"}
-                <span className="text-sm text-muted-foreground ml-2">/mes</span>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className="text-lg font-semibold">
+                  {showNumbers ? totalMonthlyExpenses.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : "•••••"}
+                  <span className="text-sm text-muted-foreground ml-2">/mes pendientes</span>
+                </div>
+                {totalPaidExpenses > 0 && (
+                  <div className="text-sm text-green-600">
+                    {showNumbers ? totalPaidExpenses.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : "•••••"}
+                    <span className="text-muted-foreground ml-1">pagados este mes</span>
+                  </div>
+                )}
               </div>
               <Button variant="ghost" size="icon" onClick={() => setShowNumbers(v => !v)}>
                 {showNumbers ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -339,7 +390,7 @@ export default function ExpensesPage() {
               </div>
             ) : (
               expenses.map((expense) => (
-                <div key={expense.id} className={`border rounded-lg p-4 ${!expense.is_active ? 'opacity-60' : ''}`}>
+                <div key={expense.id} className={`border rounded-lg p-4 ${!expense.is_active ? 'opacity-60' : ''} ${expense.is_paid ? 'bg-green-50 border-green-200' : ''}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -347,6 +398,11 @@ export default function ExpensesPage() {
                         <Badge variant={getStatusColor(expense)} className="text-xs">
                           {getNextDueDate(expense)}
                         </Badge>
+                        {expense.is_paid && (
+                          <Badge variant="default" className="text-xs bg-green-600">
+                            Pagado
+                          </Badge>
+                        )}
                         {!expense.is_active && (
                           <Badge variant="secondary" className="text-xs">
                             Inactivo
@@ -362,12 +418,27 @@ export default function ExpensesPage() {
                           <Calendar className="h-3 w-3" />
                           {new Date(expense.due_date).toLocaleDateString()}
                         </span>
+                        {expense.last_paid_date && (
+                          <span className="text-green-600 text-xs">
+                            Último pago: {new Date(expense.last_paid_date).toLocaleDateString()}
+                          </span>
+                        )}
                         {expense.description && (
                           <span className="italic">"{expense.description}"</span>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
+                      {!expense.is_paid && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleMarkAsPaid(expense)}
+                          className="text-green-600 border-green-600 hover:bg-green-50"
+                        >
+                          Marcar como pagado
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

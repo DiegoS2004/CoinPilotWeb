@@ -15,6 +15,7 @@ import { getUSDtoMXNRate, convertUSDtoMXN } from "@/lib/exchange-rate"
 
 interface DashboardStats {
   totalBalance: number
+  totalBalanceWithoutFixedExpenses: number
   monthlyIncome: number
   monthlyExpenses: number
   monthlyFixedExpenses: number
@@ -29,6 +30,7 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const [stats, setStats] = useState<DashboardStats>({
     totalBalance: 0,
+    totalBalanceWithoutFixedExpenses: 0,
     monthlyIncome: 0,
     monthlyExpenses: 0,
     monthlyFixedExpenses: 0,
@@ -95,6 +97,7 @@ export default function DashboardPage() {
         .eq("is_active", true)
 
       let totalBalance = 0
+      let totalBalanceWithoutFixedExpenses = 0
       let monthlyIncome = 0
       let monthlyExpenses = 0
       let monthlyFixedExpenses = 0
@@ -155,8 +158,11 @@ export default function DashboardPage() {
         totalInvestmentsUSD += Number(stock.shares) * Number(currentPrice)
       })
 
+      totalBalanceWithoutFixedExpenses = totalBalance - monthlyFixedExpenses
+
       setStats({
         totalBalance,
+        totalBalanceWithoutFixedExpenses,
         monthlyIncome,
         monthlyExpenses,
         monthlyFixedExpenses,
@@ -257,6 +263,19 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Balance Neto</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${stats.totalBalanceWithoutFixedExpenses >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {showNumbers ? formatMXN(stats.totalBalanceWithoutFixedExpenses) : "•••••"}
+              </div>
+              <p className="text-xs text-muted-foreground">Balance sin gastos fijos mensuales</p>
             </CardContent>
           </Card>
 

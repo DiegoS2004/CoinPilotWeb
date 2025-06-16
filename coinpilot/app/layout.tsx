@@ -9,9 +9,12 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "CoinPilot - Gestión Financiera Personal",
+  title: "CoinPilot",
   description: "Controla tus finanzas personales de manera fácil y eficiente",
-    generator: 'v0.dev'
+  generator: 'v0.dev',
+  icons: {
+    icon: "/coinpilot.png"
+  }
 }
 
 export default function RootLayout({

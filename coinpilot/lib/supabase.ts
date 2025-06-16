@@ -127,7 +127,9 @@ export type Database = {
           category: string
           frequency: string
           due_date: string
+          last_paid_date: string | null
           is_active: boolean
+          is_paid: boolean
           description: string | null
           created_at: string
         }
@@ -139,7 +141,9 @@ export type Database = {
           category: string
           frequency: string
           due_date: string
+          last_paid_date?: string | null
           is_active?: boolean
+          is_paid?: boolean
           description?: string | null
           created_at?: string
         }
@@ -151,7 +155,9 @@ export type Database = {
           category?: string
           frequency?: string
           due_date?: string
+          last_paid_date?: string | null
           is_active?: boolean
+          is_paid?: boolean
           description?: string | null
           created_at?: string
         }
