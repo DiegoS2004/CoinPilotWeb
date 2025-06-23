@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Slider } from "@/components/ui/slider"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
-import { Eye, EyeOff, DollarSign, TrendingUp, TrendingDown, PieChart as PieChartIcon, Calendar } from "lucide-react"
+import { Eye, EyeOff, DollarSign, TrendingUp, TrendingDown, PieChart as PieChartIcon, Calendar, RefreshCw, CheckCircle } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { Calendar as UiCalendar } from "@/components/ui/calendar"
@@ -92,6 +92,9 @@ export default function BudgetPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [budgetAllocations, setBudgetAllocations] = useState<BudgetAllocation[]>([])
   const [selectedPlan, setSelectedPlan] = useState<string>("")
+  const [savedPlan, setSavedPlan] = useState<string>("")
+  const [savedPlanDate, setSavedPlanDate] = useState<string>("")
+  const [showPlanOptions, setShowPlanOptions] = useState(false)
   const [netBalance, setNetBalance] = useState(0)
   const [showNumbers, setShowNumbers] = useState(true)
   const [loading, setLoading] = useState(true)
@@ -102,6 +105,23 @@ export default function BudgetPage() {
   const [dailyBudget, setDailyBudget] = useState<{ [key: string]: number }>({})
   const [weeklyBudget, setWeeklyBudget] = useState<{ [key: string]: number }>({})
   const { toast } = useToast()
+
+  // Make refreshNetBalance available globally
+  const refreshNetBalance = async () => {
+    await fetchNetBalance()
+    await fetchNextPaymentDate()
+    toast({ 
+      title: "Balance actualizado", 
+      description: "El balance neto ha sido recalculado con los gastos fijos más recientes." 
+    })
+  }
+
+  // Expose the function globally for other components to use
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).refreshBudgetNetBalance = refreshNetBalance
+    }
+  }, [])
 
   useEffect(() => {
     if (user) {
@@ -117,9 +137,18 @@ export default function BudgetPage() {
         applyBudgetPlan(selectedPlan)
       } else if (isCustomMode) {
         initializeCustomAllocations()
+      } else if (savedPlan && !selectedPlan) {
+        // Apply saved plan if no plan is currently selected
+        if (savedPlan === "custom") {
+          setIsCustomMode(true)
+          initializeCustomAllocations()
+        } else {
+          setSelectedPlan(savedPlan)
+          applyBudgetPlan(savedPlan)
+        }
       }
     }
-  }, [categories, netBalance, selectedPlan, isCustomMode])
+  }, [categories, netBalance, selectedPlan, isCustomMode, savedPlan])
 
   useEffect(() => {
     if (budgetAllocations.length > 0 && (customNextPaymentDate || nextPaymentDate)) {
@@ -135,6 +164,19 @@ export default function BudgetPage() {
     }
   }, [])
 
+  useEffect(() => {
+    // Load saved budget plan from localStorage
+    const savedPlanFromStorage = localStorage.getItem("coinpilot_budget_plan")
+    const savedPlanDateFromStorage = localStorage.getItem("coinpilot_budget_plan_date")
+    if (savedPlanFromStorage) {
+      setSavedPlan(savedPlanFromStorage)
+      setSelectedPlan(savedPlanFromStorage)
+    }
+    if (savedPlanDateFromStorage) {
+      setSavedPlanDate(savedPlanDateFromStorage)
+    }
+  }, [])
+
   const handleSaveNextPaymentDate = () => {
     if (customNextPaymentDate && customNextPaymentDate > new Date()) {
       setSavedNextPaymentDate(customNextPaymentDate)
@@ -143,6 +185,74 @@ export default function BudgetPage() {
     } else {
       toast({ title: "Fecha inválida", description: "Selecciona una fecha futura para guardar.", variant: "destructive" })
     }
+  }
+
+  const handleSaveBudgetPlan = () => {
+    if (selectedPlan) {
+      const currentDate = new Date().toLocaleDateString('es-ES', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+      localStorage.setItem("coinpilot_budget_plan", selectedPlan)
+      localStorage.setItem("coinpilot_budget_plan_date", currentDate)
+      setSavedPlan(selectedPlan)
+      setSavedPlanDate(currentDate)
+      setShowPlanOptions(false)
+      toast({ 
+        title: "Plan guardado", 
+        description: `El plan "${budgetPlans.find(p => p.id === selectedPlan)?.name}" ha sido guardado como predeterminado.` 
+      })
+    } else if (isCustomMode) {
+      const currentDate = new Date().toLocaleDateString('es-ES', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+      localStorage.setItem("coinpilot_budget_plan", "custom")
+      localStorage.setItem("coinpilot_budget_plan_date", currentDate)
+      setSavedPlan("custom")
+      setSavedPlanDate(currentDate)
+      setShowPlanOptions(false)
+      toast({ 
+        title: "Plan guardado", 
+        description: "Tu plan personalizado ha sido guardado como predeterminado." 
+      })
+    } else {
+      toast({ 
+        title: "Sin plan seleccionado", 
+        description: "Selecciona un plan o personaliza tu presupuesto antes de guardar.", 
+        variant: "destructive" 
+      })
+    }
+  }
+
+  const handlePlanChange = (planId: string) => {
+    setSelectedPlan(planId)
+    setIsCustomMode(false)
+  }
+
+  const handleCustomModeToggle = () => {
+    setIsCustomMode(!isCustomMode)
+    setSelectedPlan("")
+  }
+
+  const handleClearSavedPlan = () => {
+    localStorage.removeItem("coinpilot_budget_plan")
+    localStorage.removeItem("coinpilot_budget_plan_date")
+    setSavedPlan("")
+    setSavedPlanDate("")
+    setSelectedPlan("")
+    setIsCustomMode(false)
+    setShowPlanOptions(false)
+    toast({ 
+      title: "Plan eliminado", 
+      description: "El plan guardado ha sido eliminado. Puedes seleccionar uno nuevo." 
+    })
   }
 
   useEffect(() => {
@@ -394,9 +504,19 @@ export default function BudgetPage() {
           <h1 className="text-3xl font-bold">Presupuesto</h1>
           <p className="text-muted-foreground">Planifica y distribuye tu dinero por categorías</p>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setShowNumbers(v => !v)}>
-          {showNumbers ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={refreshNetBalance}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setShowNumbers(v => !v)}>
+            {showNumbers ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
 
       {/* Net Balance Card */}
@@ -425,46 +545,120 @@ export default function BudgetPage() {
         <CardHeader>
           <CardTitle>Plan de Presupuesto</CardTitle>
           <CardDescription>
-            Selecciona un plan predefinido o crea uno personalizado
+            {savedPlan ? (
+              <span>
+                Plan actual: <strong>{savedPlan === "custom" ? "Personalizado" : budgetPlans.find(p => p.id === savedPlan)?.name}</strong>
+              </span>
+            ) : (
+              "Selecciona un plan predefinido o crea uno personalizado"
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <Select value={selectedPlan} onValueChange={setSelectedPlan}>
-              <SelectTrigger className="w-64">
-                <SelectValue placeholder="Selecciona un plan" />
-              </SelectTrigger>
-              <SelectContent>
-                {budgetPlans.map((plan) => (
-                  <SelectItem key={plan.id} value={plan.id}>
-                    <div>
-                      <div className="font-medium">{plan.name}</div>
-                      <div className="text-sm text-muted-foreground">{plan.description}</div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            <Button 
-              variant={isCustomMode ? "default" : "outline"}
-              onClick={() => {
-                setIsCustomMode(!isCustomMode)
-                setSelectedPlan("")
-              }}
-            >
-              {isCustomMode ? "Plan Personalizado" : "Personalizar"}
-            </Button>
-          </div>
+          {!showPlanOptions && savedPlan ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-muted rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <h4 className="font-medium">
+                    {savedPlan === "custom" ? "Plan Personalizado" : budgetPlans.find(p => p.id === savedPlan)?.name}
+                  </h4>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {savedPlan === "custom" 
+                    ? "Tu distribución personalizada de categorías" 
+                    : budgetPlans.find(p => p.id === savedPlan)?.description
+                  }
+                </p>
+                {savedPlanDate && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Guardado el: {savedPlanDate}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowPlanOptions(true)}
+                >
+                  Ver otras opciones
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedPlan(savedPlan)
+                    setIsCustomMode(savedPlan === "custom")
+                  }}
+                >
+                  Editar plan actual
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={handleClearSavedPlan}
+                >
+                  Eliminar plan
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <Select value={selectedPlan} onValueChange={handlePlanChange}>
+                  <SelectTrigger className="w-64">
+                    <SelectValue placeholder="Selecciona un plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {budgetPlans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        <div>
+                          <div className="font-medium">{plan.name}</div>
+                          <div className="text-sm text-muted-foreground">{plan.description}</div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <Button 
+                  variant={isCustomMode ? "default" : "outline"}
+                  onClick={handleCustomModeToggle}
+                >
+                  {isCustomMode ? "Plan Personalizado" : "Personalizar"}
+                </Button>
+              </div>
 
-          {selectedPlan && (
-            <div className="p-4 bg-muted rounded-lg">
-              <h4 className="font-medium mb-2">
-                {budgetPlans.find(p => p.id === selectedPlan)?.name}
-              </h4>
-              <p className="text-sm text-muted-foreground">
-                {budgetPlans.find(p => p.id === selectedPlan)?.description}
-              </p>
+              {(selectedPlan || isCustomMode) && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-muted rounded-lg">
+                    <h4 className="font-medium mb-2">
+                      {isCustomMode ? "Plan Personalizado" : budgetPlans.find(p => p.id === selectedPlan)?.name}
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      {isCustomMode 
+                        ? "Tu distribución personalizada de categorías" 
+                        : budgetPlans.find(p => p.id === selectedPlan)?.description
+                      }
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handleSaveBudgetPlan}
+                      className="flex-1"
+                    >
+                      Guardar como predeterminado
+                    </Button>
+                    {savedPlan && (
+                      <Button 
+                        variant="outline"
+                        onClick={() => setShowPlanOptions(false)}
+                      >
+                        Cancelar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { Eye, EyeOff, Plus, Trash2, Edit, Calendar, DollarSign } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
 
 interface Expense {
   id: string
@@ -51,6 +52,7 @@ export default function ExpensesPage() {
   const [showNumbers, setShowNumbers] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const { toast } = useToast()
   
   // Form state
   const [name, setName] = useState("")
@@ -171,6 +173,17 @@ export default function ExpensesPage() {
         if (error) throw error
         
         fetchExpenses()
+        
+        // Refresh budget net balance if the function is available
+        if (typeof window !== 'undefined' && (window as any).refreshBudgetNetBalance) {
+          await (window as any).refreshBudgetNetBalance()
+        }
+        
+        toast({
+          title: "Pago confirmado",
+          description: `Se ha marcado como pagado ${expense.name} por ${expense.amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`,
+        })
+        
       } catch (error) {
         console.error('Error marking expense as paid:', error)
         alert('Error al marcar como pagado')
