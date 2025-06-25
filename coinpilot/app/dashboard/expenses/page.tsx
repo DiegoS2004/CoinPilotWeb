@@ -12,6 +12,7 @@ import { Eye, EyeOff, Plus, Trash2, Edit, Calendar, DollarSign } from "lucide-re
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
+import ExpenseDebug from "@/components/expense-debug"
 
 interface Expense {
   id: string
@@ -165,17 +166,26 @@ export default function ExpensesPage() {
     if (confirm(`¿Confirmar pago de ${expense.name} por ${expense.amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}?`)) {
       setLoading(true)
       try {
+        console.log('Marcando gasto como pagado:', expense.id, expense.name)
+        
         // Call the database function to mark as paid and calculate next due date
-        const { error } = await supabase.rpc('mark_expense_as_paid', {
+        const { data, error } = await supabase.rpc('mark_expense_as_paid', {
           expense_id: expense.id
         })
         
-        if (error) throw error
+        if (error) {
+          console.error('Error en la función de base de datos:', error)
+          throw error
+        }
         
-        fetchExpenses()
+        console.log('Función ejecutada exitosamente, datos retornados:', data)
+        
+        // Refresh expenses list
+        await fetchExpenses()
         
         // Refresh budget net balance if the function is available
         if (typeof window !== 'undefined' && (window as any).refreshBudgetNetBalance) {
+          console.log('Actualizando balance del presupuesto...')
           await (window as any).refreshBudgetNetBalance()
         }
         
@@ -185,10 +195,107 @@ export default function ExpensesPage() {
         })
         
       } catch (error) {
-        console.error('Error marking expense as paid:', error)
-        alert('Error al marcar como pagado')
+        console.error('Error completo al marcar como pagado:', error)
+        
+        // Mostrar error más específico
+        let errorMessage = 'Error al marcar como pagado'
+        if (error instanceof Error) {
+          errorMessage = error.message
+        } else if (typeof error === 'object' && error !== null) {
+          errorMessage = JSON.stringify(error)
+        }
+        
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
+    }
+  }
+
+  const handleMarkAsPaidAlternative = async (expense: Expense) => {
+    if (confirm(`¿Confirmar pago de ${expense.name} por ${expense.amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}?`)) {
+      setLoading(true)
+      try {
+        console.log('Marcando gasto como pagado (método alternativo):', expense.id, expense.name)
+        
+        // Calculate next due date based on frequency
+        const currentDueDate = new Date(expense.due_date)
+        let nextDueDate = new Date(currentDueDate)
+        
+        switch (expense.frequency) {
+          case 'weekly':
+            nextDueDate.setDate(currentDueDate.getDate() + 7)
+            break
+          case 'biweekly':
+            nextDueDate.setDate(currentDueDate.getDate() + 14)
+            break
+          case 'monthly':
+            nextDueDate.setMonth(currentDueDate.getMonth() + 1)
+            break
+          case 'quarterly':
+            nextDueDate.setMonth(currentDueDate.getMonth() + 3)
+            break
+          case 'yearly':
+            nextDueDate.setFullYear(currentDueDate.getFullYear() + 1)
+            break
+          default:
+            nextDueDate.setMonth(currentDueDate.getMonth() + 1)
+        }
+        
+        // Update the expense directly
+        const { error } = await supabase
+          .from("expenses")
+          .update({
+            is_paid: true,
+            last_paid_date: new Date().toISOString().split('T')[0],
+            due_date: nextDueDate.toISOString().split('T')[0],
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", expense.id)
+        
+        if (error) {
+          console.error('Error actualizando gasto:', error)
+          throw error
+        }
+        
+        console.log('Gasto actualizado exitosamente')
+        
+        // Refresh expenses list
+        await fetchExpenses()
+        
+        // Refresh budget net balance if the function is available
+        if (typeof window !== 'undefined' && (window as any).refreshBudgetNetBalance) {
+          console.log('Actualizando balance del presupuesto...')
+          await (window as any).refreshBudgetNetBalance()
+        }
+        
+        toast({
+          title: "Pago confirmado",
+          description: `Se ha marcado como pagado ${expense.name} por ${expense.amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`,
+        })
+        
+      } catch (error) {
+        console.error('Error completo al marcar como pagado (método alternativo):', error)
+        
+        let errorMessage = 'Error al marcar como pagado'
+        if (error instanceof Error) {
+          errorMessage = error.message
+        } else if (typeof error === 'object' && error !== null) {
+          errorMessage = JSON.stringify(error)
+        }
+        
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
@@ -443,14 +550,24 @@ export default function ExpensesPage() {
                     </div>
                     <div className="flex items-center gap-1">
                       {!expense.is_paid && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleMarkAsPaid(expense)}
-                          className="text-green-600 border-green-600 hover:bg-green-50"
-                        >
-                          Marcar como pagado
-                        </Button>
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleMarkAsPaid(expense)}
+                            className="text-green-600 border-green-600 hover:bg-green-50"
+                          >
+                            Marcar como pagado
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleMarkAsPaidAlternative(expense)}
+                            className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                          >
+                            Método alternativo
+                          </Button>
+                        </>
                       )}
                       <Button
                         variant="ghost"
@@ -481,6 +598,11 @@ export default function ExpensesPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Debug Component - Solo visible en desarrollo */}
+      {process.env.NODE_ENV === 'development' && (
+        <ExpenseDebug />
+      )}
     </div>
   )
 } 

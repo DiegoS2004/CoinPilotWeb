@@ -95,6 +95,7 @@ export default function DashboardPage() {
         .select("amount, frequency")
         .eq("user_id", user.id)
         .eq("is_active", true)
+        .eq("is_paid", false)
 
       let totalBalance = 0
       let totalBalanceWithoutFixedExpenses = 0
