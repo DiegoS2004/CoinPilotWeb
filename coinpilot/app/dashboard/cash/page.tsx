@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,6 +9,15 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
+import { PlusCircle } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { formatCurrency } from "@/lib/utils"
 
 interface CashEntry {
     id: string;
@@ -24,6 +33,7 @@ export default function CashPage() {
     const [cashBalance, setCashBalance] = useState(0)
     const [cashEntries, setCashEntries] = useState<CashEntry[]>([])
     const [formData, setFormData] = useState({ amount: "", description: "" })
+    const [isAddCashDialogOpen, setIsAddCashDialogOpen] = useState(false)
 
     useEffect(() => {
         if (user) {
@@ -113,9 +123,9 @@ export default function CashPage() {
                     <CardTitle>Balance de Efectivo</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-3xl font-bold">
-                        {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cashBalance)}
-                    </p>
+                    <h2 className="text-3xl font-bold">
+                        {formatCurrency(cashBalance)}
+                    </h2>
                 </CardContent>
             </Card>
 
@@ -163,23 +173,19 @@ export default function CashPage() {
                         {loading ? (
                             <p>Cargando...</p>
                         ) : cashEntries.length > 0 ? (
-                            <ul className="space-y-3">
+                            <div className="space-y-3">
                                 {cashEntries.map((entry) => (
-                                    <li key={entry.id} className="flex justify-between items-center">
+                                    <div key={entry.id} className="flex items-center justify-between">
                                         <div>
-                                            <p className="font-medium">
-                                                {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(entry.amount)}
-                                            </p>
-                                            <p className="text-sm text-muted-foreground">
-                                                {entry.description || "Sin descripción"}
-                                            </p>
+                                            <p className="font-medium">{new Date(entry.created_at).toLocaleDateString()}</p>
+                                            <p className="text-sm text-gray-500">{entry.description || "Entrada de efectivo"}</p>
                                         </div>
-                                        <p className="text-sm text-muted-foreground">
-                                            {new Date(entry.created_at).toLocaleDateString()}
+                                        <p className="text-lg font-semibold">
+                                            {formatCurrency(entry.amount)}
                                         </p>
-                                    </li>
+                                    </div>
                                 ))}
-                            </ul>
+                            </div>
                         ) : (
                             <p>No hay registros de efectivo.</p>
                         )}

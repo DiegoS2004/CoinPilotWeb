@@ -18,6 +18,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
+import { formatCurrency } from "@/lib/utils"
 
 interface Saving {
   id: string
@@ -25,6 +27,8 @@ interface Saving {
   description: string
   category: string
   date: string
+  created_at: string
+  source?: string
 }
 
 export default function SavingsPage() {
@@ -35,13 +39,8 @@ export default function SavingsPage() {
   const [description, setDescription] = useState("")
   const [category, setCategory] = useState("")
   const [loading, setLoading] = useState(false)
-  const [showNumbers, setShowNumbers] = useState(true)
   const [withdrawAmount, setWithdrawAmount] = useState(0)
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false)
-
-  useEffect(() => {
-    if (user) fetchSavings()
-  }, [user])
 
   const fetchSavings = async () => {
     setLoading(true)
@@ -51,9 +50,13 @@ export default function SavingsPage() {
       .select("*")
       .eq("user_id", user.id)
       .order("date", { ascending: false })
-    if (!error && data) setSavings(data)
+    if (!error && data) setSavings(data as Saving[])
     setLoading(false)
   }
+
+  useEffect(() => {
+    if (user) fetchSavings()
+  }, [user])
 
   const handleAddSaving = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -64,6 +67,7 @@ export default function SavingsPage() {
       amount,
       description,
       category,
+      date: new Date().toISOString(),
     })
     if (!error) {
       setAmount(0)
@@ -102,6 +106,7 @@ export default function SavingsPage() {
         amount: -withdrawAmount,
         description: "Retiro a efectivo",
         category: "Retiro",
+        date: new Date().toISOString(),
       })
       if (savingError) throw savingError
 
@@ -124,21 +129,16 @@ export default function SavingsPage() {
     <div className="max-w-2xl mx-auto py-8 space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Mis Ahorros</CardTitle>
+          <CardTitle>Total Ahorrado</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="text-2xl font-bold">
-              {showNumbers
-                ? new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(totalSavings)
-                : "•••••"}
-            </div>
-            <Button variant="ghost" size="icon" onClick={() => setShowNumbers((v) => !v)}>
-              {showNumbers ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
+          <div className="flex items-center gap-4">
+            <p className="text-4xl font-bold">
+              {loading ? "Cargando..." : formatCurrency(totalSavings)}
+            </p>
             <Dialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" disabled={totalSavings === 0}>
+                <Button variant="outline" size="sm" disabled={totalSavings === 0 || loading}>
                   <MinusCircle className="h-4 w-4 mr-1" /> Usar Ahorros
                 </Button>
               </DialogTrigger>
@@ -149,7 +149,11 @@ export default function SavingsPage() {
                     Transfiere una parte de tus ahorros a tu balance de efectivo.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-2">
+                <div className="space-y-2 py-4">
+                  <p className="text-sm text-muted-foreground">
+                    Balance de ahorros actual:{" "}
+                    <span className="font-semibold">{formatCurrency(totalSavings)}</span>
+                  </p>
                   <Label htmlFor="withdraw-amount">Monto a retirar</Label>
                   <Input
                     id="withdraw-amount"
@@ -159,55 +163,73 @@ export default function SavingsPage() {
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(Number.parseFloat(e.target.value))}
                   />
-                  <p className="text-sm text-muted-foreground">
-                    Balance de ahorros actual:{" "}
-                    {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(totalSavings)}
-                  </p>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setIsWithdrawDialogOpen(false)}>Cancelar</Button>
-                  <Button onClick={handleWithdraw} disabled={loading}>
+                  <Button onClick={handleWithdraw} disabled={loading || withdrawAmount <= 0 || withdrawAmount > totalSavings}>
                     {loading ? "Transfiriendo..." : "Confirmar Retiro"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
-          <form onSubmit={handleAddSaving} className="flex flex-col gap-2 mb-6">
-            <Label>Monto</Label>
-            <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} required />
-            <Label>Descripción</Label>
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} required />
-            <Label>Categoría</Label>
-            <Input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="Ej: Renta, Fondo de emergencia..."
-              required
-            />
-            <Button type="submit" disabled={loading}>
-              {loading ? "Guardando..." : "Agregar Ahorro"}
-            </Button>
-          </form>
-          <div>
-            <h3 className="font-semibold mb-2">Movimientos</h3>
-            {savings.length === 0 && <div className="text-muted-foreground">No hay ahorros registrados.</div>}
-            <ul className="space-y-2">
-              {savings.map((s) => (
-                <li key={s.id} className="border rounded p-2 flex flex-col">
-                  <span className={`font-medium ${s.amount < 0 ? 'text-red-500' : 'text-green-500'}`}>
-                    {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(s.amount)}
-                  </span>
-                  <span className="text-sm">
-                    {s.description} ({s.category})
-                  </span>
-                  <span className="text-xs text-muted-foreground">{new Date(s.date).toLocaleDateString()}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Agregar Ahorro</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAddSaving} className="flex flex-col gap-3">
+              <Label>Monto</Label>
+              <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} required />
+              <Label>Descripción</Label>
+              <Input value={description} onChange={(e) => setDescription(e.target.value)} required />
+              <Label>Categoría</Label>
+              <Input
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="Ej: Fondo de emergencia..."
+                required
+              />
+              <Button type="submit" disabled={loading} className="mt-2">
+                {loading ? "Guardando..." : "Agregar Ahorro"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Historial de Ahorros</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading && savings.length === 0 ? (
+                <p>Cargando historial...</p>
+            ) : savings.length > 0 ? (
+              <ul className="space-y-4">
+                {savings.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{s.description || "Ahorro"} <span className="text-muted-foreground text-sm">({s.category})</span></p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(s.date).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className={`font-medium ${s.amount < 0 ? 'text-red-500' : 'text-green-500'}`}>
+                      {formatCurrency(s.amount)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-muted-foreground">No hay ahorros registrados.</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 } 
