@@ -1,6 +1,6 @@
 "use client"
 
-import { Home, CreditCard, PieChart, Settings, LogOut, Moon, Sun, PiggyBank, TrendingUp, Bitcoin, Receipt, Target } from "lucide-react"
+import { Home, CreditCard, PieChart, Settings, LogOut, Moon, Sun, PiggyBank, TrendingUp, Bitcoin, Receipt, Target, Wallet } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useAuth } from "@/hooks/use-auth"
 import {
@@ -40,6 +40,11 @@ const menuItems = [
     title: "Presupuesto",
     url: "/dashboard/budget",
     icon: Target,
+  },
+  {
+    title: "Efectivo",
+    url: "/dashboard/cash",
+    icon: Wallet,
   },
   {
     title: "Ahorros",

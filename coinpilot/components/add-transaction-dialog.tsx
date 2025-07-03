@@ -47,6 +47,7 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
     categoryId: "",
     type: "expense" as "income" | "expense",
     date: new Date().toISOString().split("T")[0],
+    payment_method: "card",
   })
 
   useEffect(() => {
@@ -80,6 +81,7 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
         category_id: formData.categoryId || null,
         type: formData.type,
         transaction_date: formData.date,
+        payment_method: formData.payment_method,
       })
 
       if (error) throw error
@@ -96,6 +98,7 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
         categoryId: "",
         type: "expense",
         date: new Date().toISOString().split("T")[0],
+        payment_method: "card",
       })
 
       onSuccess()
@@ -153,6 +156,22 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
               onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Método de pago</Label>
+            <Select
+              value={formData.payment_method}
+              onValueChange={(value) => setFormData({ ...formData, payment_method: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un método de pago" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="card">💳 Tarjeta</SelectItem>
+                <SelectItem value="cash">💵 Efectivo</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
