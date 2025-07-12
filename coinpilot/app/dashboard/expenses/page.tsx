@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
-import { Eye, EyeOff, Plus, Trash2, Edit, Calendar, DollarSign } from "lucide-react"
+import { Eye, EyeOff, Plus, Trash2, Edit, Calendar, DollarSign, RotateCcw, CheckCircle } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import ExpenseDebug from "@/components/expense-debug"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface Expense {
   id: string
@@ -64,8 +65,74 @@ export default function ExpensesPage() {
   const [description, setDescription] = useState("")
 
   useEffect(() => {
-    if (user) fetchExpenses()
+    if (user) {
+      autoReactivateExpenses()
+      fetchExpenses()
+    }
   }, [user])
+
+  // Función automática para reactivar gastos fijos pagados si ya corresponde el siguiente ciclo
+  const autoReactivateExpenses = async () => {
+    setLoading(true)
+    try {
+      const { data: paidExpenses, error } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("user_id", user?.id)
+        .eq("is_active", true)
+        .eq("is_paid", true)
+
+      if (error) return
+      if (!paidExpenses || paidExpenses.length === 0) return
+
+      const today = new Date()
+      const updates = paidExpenses.map(expense => {
+        const dueDate = new Date(expense.due_date)
+        // Si la fecha de vencimiento ya pasó, toca reactivar
+        if (today > dueDate) {
+          // Calcular nueva fecha de vencimiento según frecuencia
+          let nextDueDate = new Date(dueDate)
+          switch (expense.frequency) {
+            case 'weekly':
+              nextDueDate.setDate(dueDate.getDate() + 7)
+              break
+            case 'biweekly':
+              nextDueDate.setDate(dueDate.getDate() + 14)
+              break
+            case 'monthly':
+              nextDueDate.setMonth(dueDate.getMonth() + 1)
+              break
+            case 'quarterly':
+              nextDueDate.setMonth(dueDate.getMonth() + 3)
+              break
+            case 'yearly':
+              nextDueDate.setFullYear(dueDate.getFullYear() + 1)
+              break
+            default:
+              nextDueDate.setMonth(dueDate.getMonth() + 1)
+          }
+          return supabase
+            .from("expenses")
+            .update({
+              is_paid: false,
+              due_date: nextDueDate.toISOString().split('T')[0],
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", expense.id)
+        }
+        return null
+      }).filter(Boolean)
+      if (updates.length > 0) {
+        await Promise.all(updates)
+        await fetchExpenses()
+        if (typeof window !== 'undefined' && (window as any).refreshBudgetNetBalance) {
+          await (window as any).refreshBudgetNetBalance()
+        }
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const fetchExpenses = async () => {
     setLoading(true)
@@ -160,6 +227,71 @@ export default function ExpensesPage() {
       fetchExpenses()
     }
     setLoading(false)
+  }
+
+  // Nueva función para reiniciar todos los pagos constantes al inicio del mes
+  const handleResetAllExpenses = async () => {
+    if (confirm("¿Estás seguro de que quieres reiniciar todos los pagos constantes? Esto marcará todos los gastos activos como no pagados.")) {
+      setLoading(true)
+      try {
+        // Obtener todos los gastos activos del usuario
+        const { data: activeExpenses, error: fetchError } = await supabase
+          .from("expenses")
+          .select("*")
+          .eq("user_id", user?.id)
+          .eq("is_active", true)
+
+        if (fetchError) {
+          throw fetchError
+        }
+
+        if (!activeExpenses || activeExpenses.length === 0) {
+          toast({
+            title: "No hay gastos para reiniciar",
+            description: "No tienes gastos fijos activos para reiniciar.",
+            variant: "destructive"
+          })
+          return
+        }
+
+        // Actualizar todos los gastos activos
+        const updatePromises = activeExpenses.map(expense => {
+          return supabase
+            .from("expenses")
+            .update({
+              is_paid: false,
+              last_paid_date: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", expense.id)
+        })
+
+        await Promise.all(updatePromises)
+
+        // Recargar la lista de gastos
+        await fetchExpenses()
+
+        // Actualizar el balance del presupuesto si está disponible
+        if (typeof window !== 'undefined' && (window as any).refreshBudgetNetBalance) {
+          await (window as any).refreshBudgetNetBalance()
+        }
+
+        toast({
+          title: "Pagos reiniciados",
+          description: `Se han reiniciado ${activeExpenses.length} pagos constantes. Todos los gastos están ahora marcados como pendientes.`,
+        })
+
+      } catch (error) {
+        console.error('Error al reiniciar gastos:', error)
+        toast({
+          title: "Error",
+          description: "No se pudieron reiniciar los pagos constantes. Intenta de nuevo.",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
   }
 
   const handleMarkAsPaid = async (expense: Expense) => {
@@ -341,6 +473,31 @@ export default function ExpensesPage() {
       return acc + monthlyAmount
     }, 0)
 
+  // Calcular el total de gastos fijos activos (sin importar si están pagados o no)
+  const totalNextCycleExpenses = expenses
+    .filter(e => e.is_active)
+    .reduce((acc, expense) => {
+      let monthlyAmount = expense.amount
+      switch (expense.frequency) {
+        case "weekly":
+          monthlyAmount = expense.amount * 4.33
+          break
+        case "biweekly":
+          monthlyAmount = expense.amount * 2.17
+          break
+        case "quarterly":
+          monthlyAmount = expense.amount / 3
+          break
+        case "yearly":
+          monthlyAmount = expense.amount / 12
+          break
+      }
+      return acc + monthlyAmount
+    }, 0)
+
+  // Calcular el balance neto después de apartar (si el usuario tiene un sueldo registrado, aquí puedes restar el totalNextCycleExpenses)
+  // Por ahora, solo mostramos el total a apartar y el total pagado
+
   const getNextDueDate = (expense: Expense) => {
     const dueDate = new Date(expense.due_date)
     const today = new Date()
@@ -370,29 +527,83 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 space-y-6">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Gastos Fijos</h1>
+          <p className="text-muted-foreground">
+            Administra tus suscripciones, pagos de tarjeta y otros gastos recurrentes
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowNumbers(!showNumbers)}
+          >
+            {showNumbers ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleResetAllExpenses}
+            disabled={loading}
+            className="text-orange-600 border-orange-600 hover:bg-orange-50"
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reiniciar Todos
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pagados este ciclo</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {showNumbers ? totalPaidExpenses.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : "•••••"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Gastos fijos pagados
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pendientes este ciclo</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {showNumbers ? totalMonthlyExpenses.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : "•••••"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Gastos fijos pendientes
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">A apartar para el próximo ciclo</CardTitle>
+            <DollarSign className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">
+              {showNumbers ? totalNextCycleExpenses.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : "•••••"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Total a reservar de tu sueldo para el siguiente ciclo
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Gastos Fijos</CardTitle>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <div className="text-lg font-semibold">
-                  {showNumbers ? totalMonthlyExpenses.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : "•••••"}
-                  <span className="text-sm text-muted-foreground ml-2">/mes pendientes</span>
-                </div>
-                {totalPaidExpenses > 0 && (
-                  <div className="text-sm text-green-600">
-                    {showNumbers ? totalPaidExpenses.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : "•••••"}
-                    <span className="text-muted-foreground ml-1">pagados este mes</span>
-                  </div>
-                )}
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => setShowNumbers(v => !v)}>
-                {showNumbers ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
+          <CardTitle>Gastos Fijos</CardTitle>
         </CardHeader>
         <CardContent>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -510,16 +721,20 @@ export default function ExpensesPage() {
               </div>
             ) : (
               expenses.map((expense) => (
-                <div key={expense.id} className={`border rounded-lg p-4 ${!expense.is_active ? 'opacity-60' : ''} ${expense.is_paid ? 'bg-green-50 border-green-200' : ''}`}>
+                <div key={expense.id} className={`border rounded-lg p-4 mb-2
+  ${!expense.is_active ? 'bg-gray-100 text-gray-500 border-gray-200' : ''}
+  ${expense.is_paid && expense.is_active ? 'bg-emerald-50 border-emerald-200 text-gray-800' : ''}
+  ${!expense.is_paid && expense.is_active ? 'bg-white border-gray-300 text-gray-900' : ''}
+`}>
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold">{expense.name}</h3>
+                        <h3 className={`font-semibold ${!expense.is_active ? 'text-gray-400' : ''} ${expense.is_paid && expense.is_active ? 'text-emerald-700' : ''}`}>{expense.name}</h3>
                         <Badge variant={getStatusColor(expense)} className="text-xs">
                           {getNextDueDate(expense)}
                         </Badge>
                         {expense.is_paid && (
-                          <Badge variant="default" className="text-xs bg-green-600">
+                          <Badge variant="default" className="text-xs bg-emerald-600">
                             Pagado
                           </Badge>
                         )}
@@ -530,16 +745,17 @@ export default function ExpensesPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span className="font-medium">
+                        <span className={`font-medium ${!expense.is_active ? 'text-gray-400' : ''} ${expense.is_paid && expense.is_active ? 'text-emerald-700' : ''}`}>
                           {showNumbers ? expense.amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : "•••••"}
                         </span>
                         <span>{expense.category}</span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {new Date(expense.due_date).toLocaleDateString()}
+                          <span className="ml-2 text-xs text-gray-500">(Próxima fecha)</span>
                         </span>
                         {expense.last_paid_date && (
-                          <span className="text-green-600 text-xs">
+                          <span className="text-emerald-600 text-xs">
                             Último pago: {new Date(expense.last_paid_date).toLocaleDateString()}
                           </span>
                         )}
@@ -550,46 +766,38 @@ export default function ExpensesPage() {
                     </div>
                     <div className="flex items-center gap-1">
                       {!expense.is_paid && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleMarkAsPaid(expense)}
-                            className="text-green-600 border-green-600 hover:bg-green-50"
-                          >
-                            Marcar como pagado
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleMarkAsPaidAlternative(expense)}
-                            className="text-blue-600 border-blue-600 hover:bg-blue-50"
-                          >
-                            Método alternativo
-                          </Button>
-                        </>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleMarkAsPaid(expense)}
+                          className="text-emerald-600 border-emerald-600 hover:bg-emerald-50"
+                        >
+                          Marcar como pagado
+                        </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(expense)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleToggleActive(expense)}
-                      >
-                        {expense.is_active ? "Desactivar" : "Activar"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(expense.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEdit(expense)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleToggleActive(expense)}>
+                            {expense.is_active ? "Desactivar" : "Activar"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleDelete(expense.id)}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>

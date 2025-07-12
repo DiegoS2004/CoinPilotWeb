@@ -24,6 +24,7 @@ interface CashEntry {
     amount: number;
     description: string | null;
     created_at: string;
+    type: 'in' | 'out';
 }
 
 export default function CashPage() {
@@ -32,7 +33,7 @@ export default function CashPage() {
     const [loading, setLoading] = useState(false)
     const [cashBalance, setCashBalance] = useState(0)
     const [cashEntries, setCashEntries] = useState<CashEntry[]>([])
-    const [formData, setFormData] = useState({ amount: "", description: "" })
+    const [formData, setFormData] = useState({ amount: "", description: "", type: "in" })
     const [isAddCashDialogOpen, setIsAddCashDialogOpen] = useState(false)
 
     useEffect(() => {
@@ -45,15 +46,15 @@ export default function CashPage() {
         if (!user) return
         setLoading(true)
         try {
-            // Fetch total cash balance
-            const { data: cashData, error: cashError } = await supabase
+            // Fetch ALL cash entries for balance
+            const { data: allEntries, error: allEntriesError } = await supabase
                 .from("cash_entries")
-                .select("amount")
+                .select("*")
                 .eq("user_id", user.id)
 
-            if (cashError) throw cashError
-            const balance = cashData.reduce((sum, entry) => sum + entry.amount, 0)
-            
+            if (allEntriesError) throw allEntriesError
+            const balance = allEntries.reduce((sum, entry) => sum + (entry.type === 'in' ? entry.amount : -entry.amount), 0)
+
             // Adjust balance based on cash expenses
             const { data: expenseData, error: expenseError } = await supabase
                 .from("transactions")
@@ -67,8 +68,7 @@ export default function CashPage() {
 
             setCashBalance(balance - expenses)
 
-
-            // Fetch recent cash entries
+            // Fetch recent cash entries (last 10 for display)
             const { data: entriesData, error: entriesError } = await supabase
                 .from("cash_entries")
                 .select("*")
@@ -96,17 +96,33 @@ export default function CashPage() {
                 user_id: user.id,
                 amount: Number.parseFloat(formData.amount),
                 description: formData.description || null,
+                type: formData.type,
             })
 
             if (error) throw error
 
             toast({
-                title: "Efectivo agregado",
-                description: "Se ha añadido el efectivo a tu balance.",
+                title: formData.type === 'in' ? "Efectivo ingresado" : "Efectivo retirado",
+                description: formData.type === 'in' ? "Se ha añadido efectivo a tu balance." : "Se ha retirado efectivo de tu balance.",
             })
 
-            setFormData({ amount: "", description: "" })
+            setFormData({ amount: "", description: "", type: "in" })
             fetchCashData() // Refresh data
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message, variant: "destructive" })
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleDeleteEntry = async (id: string) => {
+        if (!user) return
+        setLoading(true)
+        try {
+            const { error } = await supabase.from("cash_entries").delete().eq("id", id)
+            if (error) throw error
+            toast({ title: "Registro eliminado" })
+            fetchCashData()
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" })
         } finally {
@@ -132,10 +148,18 @@ export default function CashPage() {
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Añadir Efectivo</CardTitle>
+                        <CardTitle>Añadir/Retirar Efectivo</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleAddCash} className="space-y-4">
+                            <div className="flex gap-2">
+                                <Button type="button" variant={formData.type === 'in' ? 'default' : 'outline'} onClick={() => setFormData(f => ({ ...f, type: 'in' }))}>
+                                    + Ingreso
+                                </Button>
+                                <Button type="button" variant={formData.type === 'out' ? 'destructive' : 'outline'} onClick={() => setFormData(f => ({ ...f, type: 'out' }))}>
+                                    - Retiro
+                                </Button>
+                            </div>
                             <div className="space-y-2">
                                 <Label htmlFor="cash-amount">Monto</Label>
                                 <Input
@@ -157,9 +181,9 @@ export default function CashPage() {
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                 />
                             </div>
-                            <Button type="submit" disabled={loading}>
+                            <Button type="submit" disabled={loading} className="w-full">
                                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Agregar Efectivo
+                                {formData.type === 'in' ? 'Agregar Efectivo' : 'Retirar Efectivo'}
                             </Button>
                         </form>
                     </CardContent>
@@ -178,11 +202,16 @@ export default function CashPage() {
                                     <div key={entry.id} className="flex items-center justify-between">
                                         <div>
                                             <p className="font-medium">{new Date(entry.created_at).toLocaleDateString()}</p>
-                                            <p className="text-sm text-gray-500">{entry.description || "Entrada de efectivo"}</p>
+                                            <p className="text-sm text-gray-500">{entry.description || (entry.type === 'in' ? 'Ingreso de efectivo' : 'Retiro de efectivo')}</p>
                                         </div>
-                                        <p className="text-lg font-semibold">
-                                            {formatCurrency(entry.amount)}
-                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <p className={`text-lg font-semibold ${entry.type === 'in' ? 'text-green-600' : 'text-red-600'}`}>
+                                                {entry.type === 'in' ? '+' : '-'}{formatCurrency(Math.abs(entry.amount))}
+                                            </p>
+                                            <Button size="icon" variant="ghost" onClick={() => handleDeleteEntry(entry.id)} title="Eliminar">
+                                                🗑️
+                                            </Button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
