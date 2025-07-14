@@ -116,7 +116,7 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva Transacción</DialogTitle>
           <DialogDescription>Agrega una nueva transacción a tu registro financiero.</DialogDescription>
@@ -128,17 +128,17 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
             <RadioGroup
               value={formData.type}
               onValueChange={(value: "income" | "expense") => setFormData({ ...formData, type: value })}
-              className="flex space-x-4"
+              className="flex flex-col sm:flex-row gap-3"
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-muted/50">
                 <RadioGroupItem value="income" id="income" />
-                <Label htmlFor="income" className="text-green-600">
+                <Label htmlFor="income" className="text-green-600 cursor-pointer">
                   💰 Ingreso
                 </Label>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-muted/50">
                 <RadioGroupItem value="expense" id="expense" />
-                <Label htmlFor="expense" className="text-red-600">
+                <Label htmlFor="expense" className="text-red-600 cursor-pointer">
                   💸 Gasto
                 </Label>
               </div>
@@ -155,6 +155,7 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
               value={formData.amount}
               onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
               required
+              className="text-lg"
             />
           </div>
 
@@ -164,12 +165,22 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
               value={formData.payment_method}
               onValueChange={(value) => setFormData({ ...formData, payment_method: value })}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecciona un método de pago" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="card">💳 Tarjeta</SelectItem>
-                <SelectItem value="cash">💵 Efectivo</SelectItem>
+                <SelectItem value="card" className="py-3">
+                  <div className="flex items-center gap-3">
+                    <span>💳</span>
+                    <span>Tarjeta</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="cash" className="py-3">
+                  <div className="flex items-center gap-3">
+                    <span>💵</span>
+                    <span>Efectivo</span>
+                  </div>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -180,15 +191,15 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
               value={formData.categoryId}
               onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecciona una categoría" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[300px] overflow-y-auto">
                 {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    <div className="flex items-center gap-2">
-                      <span>{category.icon}</span>
-                      <span>{category.name}</span>
+                  <SelectItem key={category.id} value={category.id} className="py-3">
+                    <div className="flex items-center gap-3 w-full">
+                      <span className="text-lg">{category.icon}</span>
+                      <span className="flex-1">{category.name}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -204,6 +215,7 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
+              className="resize-none"
             />
           </div>
 
@@ -218,11 +230,11 @@ export function AddTransactionDialog({ open, onOpenChange, onSuccess }: AddTrans
             />
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading} className="w-full sm:w-auto">
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Guardar Transacción
             </Button>
