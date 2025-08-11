@@ -162,6 +162,142 @@ export type Database = {
           created_at?: string
         }
       }
+      savings: {
+        Row: {
+          id: string
+          user_id: string
+          amount: number
+          description: string | null
+          category: string | null
+          date: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          amount: number
+          description?: string | null
+          category?: string | null
+          date?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          amount?: number
+          description?: string | null
+          category?: string | null
+          date?: string
+          created_at?: string
+        }
+      }
+      cash_entries: {
+        Row: {
+          id: string
+          user_id: string
+          amount: number
+          description: string | null
+          type: 'in' | 'out'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          amount: number
+          description?: string | null
+          type: 'in' | 'out'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          amount?: number
+          description?: string | null
+          type?: 'in' | 'out'
+          created_at?: string
+        }
+      }
+      investments: {
+        Row: {
+          id: string
+          user_id: string
+          amount: number
+          description: string
+          asset: string
+          date: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          amount: number
+          description: string
+          asset: string
+          date?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          amount?: number
+          description?: string
+          asset?: string
+          date?: string
+          created_at?: string
+        }
+      }
+      saving_buckets: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          institution: string | null
+          annual_interest_rate: number | null
+          compounding: 'monthly' | 'daily' | null
+          last_accrual_date: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          institution?: string | null
+          annual_interest_rate?: number | null
+          compounding?: 'monthly' | 'daily' | null
+          last_accrual_date?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          institution?: string | null
+          annual_interest_rate?: number | null
+          compounding?: 'monthly' | 'daily' | null
+          last_accrual_date?: string | null
+          created_at?: string
+        }
+      }
+      ignored_bucket_names: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          created_at?: string
+        }
+      }
     }
   }
 }
